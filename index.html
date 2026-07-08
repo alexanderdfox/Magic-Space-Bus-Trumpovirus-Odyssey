@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Space Bus: Trumpovirus Odyssey</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+	body { font-family: system-ui, sans-serif; background: #000; overflow: hidden; }
+	canvas { 
+	  border: 2px solid #334155; 
+	  box-shadow: 0 0 70px rgba(248, 113, 113, 0.4); 
+	}
+  </style>
+</head>
+<body class="bg-gradient-to-b from-slate-950 to-red-950/30 text-white">
+  <div class="max-w-5xl mx-auto p-8 relative z-10">
+	<div class="flex justify-between items-center mb-8">
+	  <div>
+		<h1 class="text-4xl font-light tracking-widest">MAGIC SCHOOL BUS</h1>
+		<p class="text-red-400">INSIDE THE FOX CONSTELLATION BLOODSTREAM</p>
+	  </div>
+	  <button onclick="startGame()" id="startBtn"
+		class="px-8 py-4 bg-red-600 hover:bg-red-700 rounded-2xl text-lg font-semibold transition">
+		ENTER BLOODSTREAM
+	  </button>
+	</div>
+
+	<div id="gameContainer" class="hidden relative">
+	  <canvas id="gameCanvas" width="900" height="560" class="mx-auto rounded-3xl"></canvas>
+	  
+	  <div class="absolute top-6 left-6 bg-black/70 backdrop-blur px-6 py-3 rounded-2xl text-sm">
+		SCORE <span id="score" class="font-mono text-yellow-400 ml-2">00000</span><br>
+		VESSEL INTEGRITY <span id="health" class="font-mono text-emerald-400 ml-2">100%</span>
+	  </div>
+	</div>
+
+	<div id="intro" class="text-center py-16">
+	  <p class="text-3xl mb-6">The Magic School Bus has shrunk and entered the bloodstream...</p>
+	  <p class="text-xl text-red-300">Navigate the flowing plasma. Avoid the Trumpovirus outbreak.</p>
+	</div>
+  </div>
+
+  <script>
+	const canvas = document.getElementById('gameCanvas');
+	const ctx = canvas.getContext('2d');
+	
+	let score = 0;
+	let health = 100;
+	let gameRunning = false;
+
+	let bus = { x: 380, y: 300, vx: 0, vy: 0, width: 95, height: 52 };
+
+	let orbs = [];      // Knowledge / Antibodies
+	let viruses = [];   // Trumpovirus particles
+	let bloodCells = []; // Background red blood cells
+
+	const flowSpeed = 3.2; // Blood flow pushing everything
+
+	function createBloodCells() {
+	  bloodCells = [];
+	  for (let i = 0; i < 35; i++) {
+		bloodCells.push({
+		  x: Math.random() * canvas.width,
+		  y: Math.random() * canvas.height,
+		  size: 18 + Math.random() * 12,
+		  speed: 1.5 + Math.random() * 2
+		});
+	  }
+	}
+
+	function spawnOrb() {
+	  orbs.push({ x: 100 + Math.random() * 700, y: -30, size: 13, vx: (Math.random()-0.5)*1.5 });
+	}
+
+	function spawnVirus() {
+	  viruses.push({ 
+		x: 80 + Math.random() * 740, 
+		y: -50, 
+		size: 32,
+		vx: (Math.random()-0.5)*2.2,
+		wiggle: 0
+	  });
+	}
+
+	function drawBackground() {
+	  ctx.fillStyle = '#1a0f12';
+	  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+	  // Plasma glow
+	  ctx.fillStyle = 'rgba(248, 113, 113, 0.08)';
+	  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+	  // Red blood cells in background
+	  ctx.fillStyle = '#b91c1c';
+	  for (let cell of bloodCells) {
+		ctx.globalAlpha = 0.6;
+		ctx.beginPath();
+		ctx.ellipse(cell.x, cell.y, cell.size, cell.size * 0.6, 0, 0, Math.PI*2);
+		ctx.fill();
+		cell.y += cell.speed + flowSpeed * 0.6;
+		if (cell.y > canvas.height + 50) cell.y = -50;
+	  }
+	  ctx.globalAlpha = 1;
+	}
+
+	function drawBus() {
+	  ctx.save();
+	  ctx.translate(bus.x + bus.width/2, bus.y + bus.height/2);
+	  ctx.rotate(bus.vx * 0.015); // tilt with movement
+
+	  // Bus body - more biological / submarine look
+	  ctx.fillStyle = '#334155';
+	  ctx.beginPath();
+	  ctx.roundRect(-47, -26, 94, 52, 18);
+	  ctx.fill();
+
+	  ctx.fillStyle = '#22d3ee';
+	  ctx.fillRect(-40, -18, 80, 14);
+
+	  // Windows
+	  ctx.fillStyle = '#67e8f9';
+	  ctx.shadowBlur = 15;
+	  ctx.shadowColor = '#67e8f9';
+	  for (let i = 0; i < 3; i++) {
+		ctx.fillRect(-32 + i*26, -14, 18, 11);
+	  }
+	  ctx.shadowBlur = 0;
+
+	  // Thrusters
+	  ctx.fillStyle = '#f43f5e';
+	  ctx.fillRect(-35, 22, 70, 12);
+
+	  ctx.restore();
+	}
+
+	function updateAndDraw() {
+	  if (!gameRunning) return;
+
+	  drawBackground();
+
+	  // Blood flow influence
+	  bus.vy = (bus.vy * 0.92) + flowSpeed * 0.3;
+
+	  // Player controls
+	  if (keys['ArrowLeft']) bus.vx -= 0.8;
+	  if (keys['ArrowRight']) bus.vx += 0.8;
+	  if (keys[' ']) bus.vy -= 1.8; // fight the current
+
+	  // Physics (damping + flow)
+	  bus.vx *= 0.88;
+	  bus.vy *= 0.94;
+	  bus.x += bus.vx;
+	  bus.y += bus.vy;
+
+	  // Keep in bounds (vessel walls)
+	  if (bus.x < 30) { bus.x = 30; bus.vx = 2; }
+	  if (bus.x > canvas.width - bus.width - 30) { bus.x = canvas.width - bus.width - 30; bus.vx = -3; }
+	  if (bus.y < 40) { bus.y = 40; bus.vy = 3; }
+	  if (bus.y > canvas.height - 80) { bus.y = canvas.height - 80; bus.vy = -2; }
+
+	  drawBus();
+
+	  // Orbs (antibodies / knowledge)
+	  for (let i = orbs.length-1; i >= 0; i--) {
+		const o = orbs[i];
+		o.y += flowSpeed + 1.5;
+		o.x += o.vx;
+
+		ctx.shadowBlur = 22;
+		ctx.shadowColor = '#a5f3fc';
+		ctx.fillStyle = '#67e8f9';
+		ctx.beginPath();
+		ctx.arc(o.x, o.y, o.size, 0, Math.PI*2);
+		ctx.fill();
+		ctx.shadowBlur = 0;
+
+		if (o.y > canvas.height + 40) orbs.splice(i, 1);
+
+		if (Math.hypot(o.x - (bus.x + 47), o.y - (bus.y + 26)) < 48) {
+		  score += 30;
+		  document.getElementById('score').textContent = String(score).padStart(5,'0');
+		  orbs.splice(i, 1);
+		}
+	  }
+
+	  // Trumpovirus
+	  for (let i = viruses.length-1; i >= 0; i--) {
+		const v = viruses[i];
+		v.y += flowSpeed + 1.8;
+		v.x += v.vx;
+		v.wiggle = Math.sin(Date.now()/120) * 7;
+
+		ctx.shadowBlur = 40;
+		ctx.shadowColor = '#f97316';
+		ctx.fillStyle = '#f59e0b';
+		ctx.beginPath();
+		ctx.arc(v.x + v.wiggle, v.y, v.size, 0, Math.PI*2);
+		ctx.fill();
+
+		// Orange wig
+		ctx.fillStyle = '#fcd34d';
+		ctx.fillRect(v.x - 21 + v.wiggle, v.y - 34, 42, 13);
+
+		ctx.shadowBlur = 0;
+
+		if (v.y > canvas.height + 80) viruses.splice(i, 1);
+
+		if (Math.hypot(v.x + v.wiggle - (bus.x + 47), v.y - (bus.y + 26)) < 52) {
+		  health -= 16;
+		  document.getElementById('health').textContent = Math.max(0, health) + "%";
+		  viruses.splice(i, 1);
+		  if (health <= 0) endGame();
+		}
+	  }
+
+	  requestAnimationFrame(updateAndDraw);
+	}
+
+	const keys = {};
+	window.addEventListener('keydown', e => keys[e.key] = true);
+	window.addEventListener('keyup', e => keys[e.key] = false);
+
+	function startGame() {
+	  document.getElementById('intro').classList.add('hidden');
+	  document.getElementById('gameContainer').classList.remove('hidden');
+	  document.getElementById('startBtn').classList.add('hidden');
+
+	  score = 0; health = 100;
+	  orbs = []; viruses = [];
+	  gameRunning = true;
+
+	  createBloodCells();
+	  document.getElementById('score').textContent = '00000';
+	  document.getElementById('health').textContent = '100%';
+
+	  updateAndDraw();
+	}
+
+	function endGame() {
+	  gameRunning = false;
+	  alert("The Trumpovirus has overwhelmed the bloodstream.\n\nRefresh to try again.");
+	}
+
+	// Spawning
+	setInterval(() => { if (gameRunning) spawnOrb(); }, 550);
+	setInterval(() => { if (gameRunning) spawnVirus(); }, 1100);
+  </script>
+</body>
+</html>
